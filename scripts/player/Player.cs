@@ -92,14 +92,14 @@ public partial class Player : CharacterBody3D
 		// Add the gravity.
 		if (IsOnFloor())
 		{
-			GroundPhysics(felta);
+			ground_physics(felta);
 		}
 		else
 		{
-			AirPhysics(felta);
+			air_physics(felta);
 		}
 
-		CommonPhysics(felta);
+		common_physics(felta);
 
 
 		// Get the input direction and handle the movement/deceleration.
@@ -113,7 +113,7 @@ public partial class Player : CharacterBody3D
 	// these functions are only called from Process and PhysicsProcess
 	// : Physics {{{
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void GroundPhysics(float delta)
+	public void ground_physics(float delta)
 	{
 		// attempt to jump
 		if (Input.IsActionPressed("jump"))
@@ -137,17 +137,22 @@ public partial class Player : CharacterBody3D
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void AirPhysics(float delta)
+	public void air_physics(float delta)
 	{
 		// apply gravity
 		velocity += gravity * delta;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void CommonPhysics(float delta)
+	public void common_physics(float delta)
 	{
 
 	}
 	// : }}}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void set_fov(float desired_fov)
+	{
+		camera.Fov = desired_fov;
+	}
 }

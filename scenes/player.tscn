@@ -16,4 +16,4 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 [node name="camera" type="Camera3D" parent="head"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.000445843, 0.00406909, -0.000247955)
 current = true
-fov = 110.0
+fov = 100.0

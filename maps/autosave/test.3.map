@@ -143,7 +143,5 @@
 // entity 1
 {
 "classname" "light"
-"origin" "0 0 288"
-"angle" "180"
-"light" "600"
+"origin" "16 -48 288"
 }
