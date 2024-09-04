@@ -6,6 +6,7 @@
 
 [node name="player" type="CharacterBody3D"]
 script = ExtResource("1_c1dq6")
+mouse_sensitivity = 0.001
 
 [node name="collider" type="CollisionShape3D" parent="."]
 shape = SubResource("CapsuleShape3D_00r4a")
@@ -17,3 +18,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.000445843, 0.00406909, -0.000247955)
 current = true
 fov = 100.0
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="ColorRect" type="ColorRect" parent="Control"]
+layout_mode = 0
+offset_left = 960.0
+offset_top = 540.0
+offset_right = 962.0
+offset_bottom = 542.0
+color = Color(0, 1, 0, 1)

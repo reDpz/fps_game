@@ -1,7 +1,25 @@
 // vim:fileencoding=utf-8:foldmethod=marker
+#define RDEBUG
 using Godot;
 using System;
 using System.Runtime.CompilerServices;
+
+// : TODO: {{{
+// - Get lurching working
+// - Get a better understanding of what the air_* values do
+// : }}}
+
+// : NOTE: {{{
+// - 
+// : }}}
+
+
+// : FIXME: {{{
+// - Nothing
+// : }}}
+
+
+
 
 public partial class Player : CharacterBody3D
 {
@@ -12,12 +30,12 @@ public partial class Player : CharacterBody3D
 	private const float X_ROTATION_LOCK_RAD = 1.55334f;
 	// : }}}
 
-	public const float speed = 5.0f;
-	public const float jump_velocity = 4.5f;
 
-	// : Input Properties {{{
+	// : Settings Properties {{{
 	[Export]
 	public float mouse_sensitivity = 0.003f;
+	[Export]
+	public bool auto_hop = true;
 	// : }}}
 
 	// : Physics Properties {{{
@@ -28,12 +46,24 @@ public partial class Player : CharacterBody3D
 	private Vector2 world_vector = Vector2.Zero;
 	private Vector3 wish_dir = Vector3.Zero;
 
+	// jumping
+	public const float jump_velocity = 4.0f;
+	public float last_jump_pressed = float.PositiveInfinity;
+	public float jump_buffer_min = 0.1f;
+	public float last_jumped = float.PositiveInfinity;
+	public float jump_fatigue = 0.9f;
+
+
 	// source movement
 	// : AIR Movement {{{
 	public float floor_max_angle = Mathf.DegToRad(80);
-	public float air_cap = 0.15f;
+	public float air_cap = 0.35f;
 	public float air_accel = 1.5f;
-	public float air_move_speed = 25.0f;
+	public float air_move_speed = 15.0f;
+	/* public float air_cap = 0.20f;
+	public float air_accel = 800f;
+	public float air_move_speed = 500f; */
+
 	// : }}}
 
 	// : GROUND Movement {{{
@@ -43,6 +73,9 @@ public partial class Player : CharacterBody3D
 	public float ground_decel = 10.0f;
 	public float ground_friction = 6.0f;
 	// : }}}
+
+	// Apex/Titanfall movement
+	private bool new_input_pressed = false;
 
 	// : }}}
 
@@ -119,6 +152,16 @@ public partial class Player : CharacterBody3D
 		world_vector = input_vector.Rotated(-Rotation.Y);
 		wish_dir = new Vector3(world_vector.X, 0.0f, world_vector.Y);
 
+		new_input_pressed = Input.IsActionJustPressed("strafe_left") || Input.IsActionJustPressed("strafe_right") ||
+			Input.IsActionJustPressed("forward") || Input.IsActionJustPressed("backward");
+
+		// input handling
+		if (is_jump_pressed())
+		{
+			last_jump_pressed = 0;
+		}
+
+
 
 		// Add the gravity.
 		if (IsOnFloor())
@@ -139,6 +182,10 @@ public partial class Player : CharacterBody3D
 
 		Velocity = velocity;
 		MoveAndSlide();
+
+		// calculate camera tilt
+		Vector3 relative_velocity = Velocity * Transform.Basis;
+		Vector3 camera_rotation = camera.Rotation;
 	}
 
 	// these functions are only called from Process and PhysicsProcess
@@ -146,10 +193,9 @@ public partial class Player : CharacterBody3D
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void ground_physics(float delta)
 	{
-		// attempt to jump
-		if (Input.IsActionJustPressed("jump") || Input.IsActionJustReleased("jump"))
+		// jump if all conditions are valid
+		if (attempt_jump())
 		{
-			velocity.Y = jump_velocity;
 			return;
 		}
 
@@ -199,6 +245,8 @@ public partial class Player : CharacterBody3D
 			accel_speed = Mathf.Min(add_speed_till_cap, accel_speed);
 			velocity += accel_speed * wish_dir;
 		}
+
+
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -220,6 +268,8 @@ public partial class Player : CharacterBody3D
 			// this allows for surfing
 			clip_velocity(wall_normal, 1.0f, delta);
 		}
+		last_jump_pressed += delta;
+		last_jumped += delta;
 	}
 	// : }}}
 
@@ -255,6 +305,43 @@ public partial class Player : CharacterBody3D
 	{
 		float max_slope_ang_dot = Vector3.Up.Rotated(Vector3.Right, floor_max_angle).Dot(Vector3.Up);
 		return normal.Dot(Vector3.Up) < max_slope_ang_dot;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private bool is_jump_pressed()
+	{
+		return (Input.IsActionJustPressed("jump") || Input.IsActionJustReleased("jump")) || (auto_hop && Input.IsActionPressed("jump"));
+	}
+
+	private void jump()
+	{
+		float jump_propulsion = jump_velocity;
+#if RDEBUG
+		GD.Print($"{last_jumped} <= {jump_fatigue} : {last_jumped <= jump_fatigue}");
+#endif
+		if (last_jumped <= jump_fatigue)
+		{
+			jump_propulsion *= 0.6f;
+		}
+		velocity.Y += jump_propulsion;
+		last_jumped = 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private bool attempt_jump()
+	{
+		if (last_jump_pressed < jump_buffer_min)
+		{
+			jump();
+			return true;
+		}
+		return false;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void attempt_lurch(float delta)
+	{
+
 	}
 
 }
