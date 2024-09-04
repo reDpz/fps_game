@@ -30,9 +30,10 @@ public partial class Player : CharacterBody3D
 
 	// source movement
 	// : AIR Movement {{{
-	public float air_cap = 0.25f;
-	public float air_accel = 100.0f;
-	public float air_move_speed = 55.0f;
+	public float floor_max_angle = Mathf.DegToRad(80);
+	public float air_cap = 0.15f;
+	public float air_accel = 1.5f;
+	public float air_move_speed = 25.0f;
 	// : }}}
 
 	// : GROUND Movement {{{
@@ -146,7 +147,7 @@ public partial class Player : CharacterBody3D
 	public void ground_physics(float delta)
 	{
 		// attempt to jump
-		if (Input.IsActionPressed("jump"))
+		if (Input.IsActionJustPressed("jump") || Input.IsActionJustReleased("jump"))
 		{
 			velocity.Y = jump_velocity;
 			return;
@@ -163,12 +164,11 @@ public partial class Player : CharacterBody3D
 			velocity += accel_speed * wish_dir;
 		}
 
-		// FIXME: this is broken
 		// friction
 		float len = velocity.Length();
 		float control = Mathf.Max(len, ground_decel);
 		float drop = control * ground_friction * delta;
-		float new_speed = Mathf.Min(len - drop, 0.0f);
+		float new_speed = Mathf.Max(len - drop, 0.0f);
 		if (len > 0.0f)
 		{
 			new_speed /= len;
@@ -204,7 +204,22 @@ public partial class Player : CharacterBody3D
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void common_physics(float delta)
 	{
+		if (IsOnWall())
+		{
+			var wall_normal = GetWallNormal();
+			// this fixes jittering but broken for now
+			if (is_surface_too_steep(wall_normal))
+			{
+				MotionMode = CharacterBody3D.MotionModeEnum.Floating;
+			}
+			else
+			{
+				MotionMode = CharacterBody3D.MotionModeEnum.Grounded;
+			}
 
+			// this allows for surfing
+			clip_velocity(wall_normal, 1.0f, delta);
+		}
 	}
 	// : }}}
 
@@ -213,4 +228,33 @@ public partial class Player : CharacterBody3D
 	{
 		camera.Fov = desired_fov;
 	}
+
+	// prevents clipping into walls essentially, but causes the "surf" bug
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void clip_velocity(Vector3 normal, float overbounce, float delta)
+	{
+		float backoff = velocity.Dot(normal) * overbounce;
+
+		if (backoff >= 0.0f)
+		{
+			return;
+		}
+
+		velocity -= normal * backoff;
+
+		float adjust = velocity.Dot(normal);
+		if (adjust < 0.0f)
+		{
+			velocity -= normal * adjust;
+		}
+
+
+	}
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private bool is_surface_too_steep(Vector3 normal)
+	{
+		float max_slope_ang_dot = Vector3.Up.Rotated(Vector3.Right, floor_max_angle).Dot(Vector3.Up);
+		return normal.Dot(Vector3.Up) < max_slope_ang_dot;
+	}
+
 }
