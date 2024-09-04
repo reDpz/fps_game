@@ -58,8 +58,8 @@ public partial class Player : CharacterBody3D
 	// : AIR Movement {{{
 	public float floor_max_angle = Mathf.DegToRad(80);
 	public float air_cap = 0.35f;
-	public float air_accel = 1.5f;
-	public float air_move_speed = 15.0f;
+	public float air_accel = 10f;
+	public float air_move_speed = 4f;
 	/* public float air_cap = 0.20f;
 	public float air_accel = 800f;
 	public float air_move_speed = 500f; */
@@ -96,7 +96,7 @@ public partial class Player : CharacterBody3D
 		// lock mouse
 		Input.MouseMode = Input.MouseModeEnum.Captured;
 
-
+		// fullscreen, this should only be for debug builds
 	}
 
 	public override void _Input(InputEvent @event)
@@ -128,11 +128,25 @@ public partial class Player : CharacterBody3D
 		}
 		else if (@event is InputEventKey key_event)
 		{
-			// basic reset feature
-			if (key_event.Keycode == Key.T)
+
+			if (key_event.Pressed = true)
 			{
-				Position = new Vector3(0.0f, 20f, 0.0f);
-				Velocity = Vector3.Zero;
+
+				switch (key_event.Keycode)
+				{
+					#if RDEBUG
+					case Key.F11:
+						DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen);
+						break;
+					#endif
+					
+					// basic reset feature
+					case Key.T:
+						Position = new Vector3(0.0f, 20f, 0.0f);
+						Velocity = Vector3.Zero;
+						break;
+					
+				}
 			}
 		}
 
