@@ -16,6 +16,7 @@ public partial class Player : CharacterBody3D
 	public const float jump_velocity = 4.5f;
 
 	// : Input Properties {{{
+	[Export]
 	public float mouse_sensitivity = 0.003f;
 	// : }}}
 
@@ -23,8 +24,25 @@ public partial class Player : CharacterBody3D
 	// setting a default, only to ensure that we dont run into null
 	public Vector3 gravity = Vector3.Zero;
 	private Vector3 velocity = Vector3.Zero;
-	private Vector3 input_vector = Vector3.Zero;
-	private Vector3 world_vector = Vector3.Zero;
+	private Vector2 input_vector = Vector2.Zero;
+	private Vector2 world_vector = Vector2.Zero;
+	private Vector3 wish_dir = Vector3.Zero;
+
+	// source movement
+	// : AIR Movement {{{
+	public float air_cap = 0.25f;
+	public float air_accel = 100.0f;
+	public float air_move_speed = 55.0f;
+	// : }}}
+
+	// : GROUND Movement {{{
+	public float walk_speed = 7.0f;
+	public float sprint_speed = 8.5f;
+	public float ground_accel = 14.0f;
+	public float ground_decel = 10.0f;
+	public float ground_friction = 6.0f;
+	// : }}}
+
 	// : }}}
 
 	// : Node Properties {{{
@@ -74,6 +92,15 @@ public partial class Player : CharacterBody3D
 
 
 		}
+		else if (@event is InputEventKey key_event)
+		{
+			// basic reset feature
+			if (key_event.Keycode == Key.T)
+			{
+				Position = new Vector3(0.0f, 20f, 0.0f);
+				Velocity = Vector3.Zero;
+			}
+		}
 
 		// : }}}
 	}
@@ -83,11 +110,14 @@ public partial class Player : CharacterBody3D
 		// update all values
 		gravity = GetGravity();
 		float felta = (float)delta;
+		// TODO: check if this is actually needed
+		velocity = Velocity;
 
-		Vector2 input_dir = Input.GetVector("strafe_left", "strafe_right", "forward", "backward");
-		input_vector.X = input_dir.X;
-		input_vector.Z = input_dir.Y;
-		world_vector = Transform.Basis * input_vector;
+		input_vector = Input.GetVector("strafe_left", "strafe_right", "forward", "backward");
+		// Wish dir is in worldspace
+		world_vector = input_vector.Rotated(-Rotation.Y);
+		wish_dir = new Vector3(world_vector.X, 0.0f, world_vector.Y);
+
 
 		// Add the gravity.
 		if (IsOnFloor())
@@ -122,17 +152,29 @@ public partial class Player : CharacterBody3D
 			return;
 		}
 
-		if (input_vector != Vector3.Zero)
+		// TODO: replace walk_speed with sprint whenever needed, with an inline function. Yeah you could do 2 function calls but it doesnt hurt to only do 1
+		var cur_speed_in_wish_dir = velocity.Dot(wish_dir);
+		var add_speed_till_cap = walk_speed - cur_speed_in_wish_dir;
+
+		if (add_speed_till_cap > 0.0f)
 		{
-			velocity.X = world_vector.X * speed;
-			velocity.Z = world_vector.Z * speed;
-		}
-		else
-		{
-			velocity.X = Mathf.MoveToward(Velocity.X, 0, speed);
-			velocity.Z = Mathf.MoveToward(Velocity.Z, 0, speed);
+			var accel_speed = ground_accel * delta * walk_speed;
+			accel_speed = Mathf.Min(accel_speed, add_speed_till_cap);
+			velocity += accel_speed * wish_dir;
 		}
 
+		// FIXME: this is broken
+		// friction
+		float len = velocity.Length();
+		float control = Mathf.Max(len, ground_decel);
+		float drop = control * ground_friction * delta;
+		float new_speed = Mathf.Min(len - drop, 0.0f);
+		if (len > 0.0f)
+		{
+			new_speed /= len;
+		}
+
+		velocity *= new_speed;
 
 	}
 
@@ -141,6 +183,22 @@ public partial class Player : CharacterBody3D
 	{
 		// apply gravity
 		velocity += gravity * delta;
+
+		// ITS THIS SHORT?
+		var cur_speed_in_wish_dir = velocity.Dot(wish_dir);
+
+		// i feel like there is some unnecessary math going on here but it's still useful for controller i guess
+		var capped_speed = Mathf.Min((air_move_speed * world_vector).Length(), air_cap);
+
+		// this is essentially how much speed to add until we reach cap
+		var add_speed_till_cap = capped_speed - cur_speed_in_wish_dir;
+
+		if (add_speed_till_cap > 0.0f)
+		{
+			var accel_speed = air_accel * air_move_speed * delta;
+			accel_speed = Mathf.Min(add_speed_till_cap, accel_speed);
+			velocity += accel_speed * wish_dir;
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
