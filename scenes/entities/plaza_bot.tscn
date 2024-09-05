@@ -1,29 +1,33 @@
-[gd_scene load_steps=5 format=3 uid="uid://jgisl2q15s8t"]
+[gd_scene load_steps=6 format=3 uid="uid://jgisl2q15s8t"]
 
 [ext_resource type="Script" path="res://scripts/player/bot/plaza_bot.cs" id="1_2tueb"]
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_ofb62"]
-radius = 0.4
-height = 1.8
+[ext_resource type="Script" path="res://addons/smoothing/smoothing.gd" id="2_o4r33"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_v384w"]
-radius = 0.4
+radius = 0.3
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_ofb62"]
+radius = 0.3
 height = 1.8
 
 [sub_resource type="BoxOccluder3D" id="BoxOccluder3D_k73wk"]
-size = Vector3(0.8, 1.8, 0.8)
+size = Vector3(0.6, 1.8, 0.6)
 
 [node name="CharacterBody3D" type="CharacterBody3D"]
 script = ExtResource("1_2tueb")
-
-[node name="CSGMesh3D" type="CSGMesh3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
-mesh = SubResource("CapsuleMesh_ofb62")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_v384w")
 
-[node name="OccluderInstance3D" type="OccluderInstance3D" parent="."]
+[node name="Smoothing" type="Node3D" parent="."]
+script = ExtResource("2_o4r33")
+
+[node name="CSGMesh3D" type="CSGMesh3D" parent="Smoothing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("CapsuleMesh_ofb62")
+
+[node name="OccluderInstance3D" type="OccluderInstance3D" parent="Smoothing"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 occluder = SubResource("BoxOccluder3D_k73wk")
