@@ -5,8 +5,11 @@ using System;
 using System.Runtime.CompilerServices;
 
 // : TODO: {{{
-// - Get lurching working
-// - Get a better understanding of what the air_* values do
+// - [ ] Get lurching working
+// - [ ] Get a better understanding of what the air_* values do
+// - [ ] using a 1 byte uint to keep track of what inputs were pressed
+// - [ ] allow for the use of scrollwheel
+// = [ ] Implement fast square root for some extra performance
 // : }}}
 
 // : NOTE: {{{
@@ -40,14 +43,14 @@ public partial class Player : CharacterBody3D
 
 	// : Physics Properties {{{
 	// setting a default, only to ensure that we dont run into null
-	public Vector3 gravity = Vector3.Zero;
+	private Vector3 gravity = Vector3.Zero;
 	private Vector3 velocity = Vector3.Zero;
 	private Vector2 input_vector = Vector2.Zero;
 	private Vector2 world_vector = Vector2.Zero;
 	private Vector3 wish_dir = Vector3.Zero;
 
 	// jumping
-	public const float jump_velocity = 4.0f;
+	public float jump_velocity = 4.0f;
 	public float last_jump_pressed = float.PositiveInfinity;
 	public float jump_buffer_min = 0.1f;
 	public float last_jumped = float.PositiveInfinity;
@@ -68,6 +71,7 @@ public partial class Player : CharacterBody3D
 
 	// : GROUND Movement {{{
 	public float walk_speed = 7.0f;
+	public float strafe_speed = 6.0f;
 	public float sprint_speed = 8.5f;
 	public float ground_accel = 14.0f;
 	public float ground_decel = 10.0f;
@@ -126,6 +130,20 @@ public partial class Player : CharacterBody3D
 
 
 		}
+		/* 	else if (@event is InputEventMouseButton mouse_button)
+			{
+				switch (mouse_button.ButtonIndex)
+				{
+					case MouseButton.WheelDown:
+						// Input.ActionPress("jump");
+						break;
+					case MouseButton.WheelUp:
+						// Input.ActionPress("forward");
+						new_input_pressed = true;
+						break;
+
+				}
+			} */
 		else if (@event is InputEventKey key_event)
 		{
 
@@ -134,18 +152,18 @@ public partial class Player : CharacterBody3D
 
 				switch (key_event.Keycode)
 				{
-					#if RDEBUG
+#if RDEBUG
 					case Key.F11:
 						DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen);
 						break;
-					#endif
-					
+#endif
+
 					// basic reset feature
 					case Key.T:
 						Position = new Vector3(0.0f, 20f, 0.0f);
 						Velocity = Vector3.Zero;
 						break;
-					
+
 				}
 			}
 		}
@@ -161,21 +179,35 @@ public partial class Player : CharacterBody3D
 		// TODO: check if this is actually needed
 		velocity = Velocity;
 
-		input_vector = Input.GetVector("strafe_left", "strafe_right", "forward", "backward");
+		input_vector = Vector2.Zero;
+		input_vector.X += Input.IsActionPressed("strafe_right") ? 1.0f : 0.0f;
+		input_vector.X -= Input.IsActionPressed("strafe_left") ? 1.0f : 0.0f;
+		input_vector.Y += Input.IsActionPressed("backward") ? 1.0f : 0.0f;
+		input_vector.Y -= Input.IsActionPressed("forward") || Input.IsActionJustReleased("mwheelup") ? 1.0f : 0.0f;
+
+		input_vector = input_vector.Normalized();
+
+		// TODO: figure out how to apply strafe_speed
+
+		/* Vector2 temp_vector = input_vector;
+		// in the future use a get_speed and get_strafe_speed function so that these values can vary
+		// depending on conditions like what weapon the player is holding
+		temp_vector.Y *= walk_speed;
+		temp_vector.X *= strafe_speed; */
+
 		// Wish dir is in worldspace
 		world_vector = input_vector.Rotated(-Rotation.Y);
 		wish_dir = new Vector3(world_vector.X, 0.0f, world_vector.Y);
 
+		// this is a bit slow, since we're querying the same information twice;  TODO: optimize later
 		new_input_pressed = Input.IsActionJustPressed("strafe_left") || Input.IsActionJustPressed("strafe_right") ||
-			Input.IsActionJustPressed("forward") || Input.IsActionJustPressed("backward");
+			(Input.IsActionJustPressed("forward") || Input.IsActionJustReleased("mwheelup")) || Input.IsActionJustPressed("backward");
 
 		// input handling
-		if (is_jump_pressed())
+		if (is_jump_pressed() || Input.IsActionJustReleased("mwheeldown"))
 		{
 			last_jump_pressed = 0;
 		}
-
-
 
 		// Add the gravity.
 		if (IsOnFloor())
@@ -189,10 +221,8 @@ public partial class Player : CharacterBody3D
 
 		common_physics(felta);
 
-
 		// Get the input direction and handle the movement/deceleration.
 		// As good practice, you should replace UI actions with custom gameplay actions.
-
 
 		Velocity = velocity;
 		MoveAndSlide();
@@ -260,7 +290,7 @@ public partial class Player : CharacterBody3D
 			velocity += accel_speed * wish_dir;
 		}
 
-
+		attempt_lurch(delta);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -352,10 +382,62 @@ public partial class Player : CharacterBody3D
 		return false;
 	}
 
+	// TODO: remove this label if used repeatedly
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void attempt_lurch(float delta)
 	{
+		// this is essentially copied from momentum mod
 
+		// using last_jumped might be a slight tinge of jank
+		// last_jumped should always be greater than 0
+		if (new_input_pressed && (last_jumped > 0.0f && wish_dir.Length() > 0.1f))
+		{
+			// should not need to normalize however check later
+			// Probably a good idea to create/get a fast normalizer although I dont think the performance impact will be that big
+			// Looks like the original code that has a "FastNormalize" function is using the fast inverse square root from quake
+			wish_dir = wish_dir.Normalized();
+			float min_time = 0.2f;
+			float max_time = 0.5f;
+			// I'm a bit unsure of why in the original source code it's divided by a 1000, possibly the timer is stored in MS rather than seconds?
+			// min and max are both stored in seconds very clearly as they correspond to the numbers zweek showed that determins the strength
+			// I am not storing my time in MS therefore I probably shouldn't divide by a 1000
+			float amount = Mathf.Min(last_jumped / (max_time - min_time), 1.0f);
+			float strength = 0.7f;
+			// here PK_SPRINT_SPEED is being substituted by my sprint speed, I'm also using strength instead of the 0.7 float literal
+			// It's a bit confusing as to why they defined strength and then didn't use it until later. It doesn't make sense to do that
+			float max = sprint_speed * strength * amount;
+
+			Vector3 current_direction = velocity;
+			current_direction.Y = 0.0f;
+			current_direction = current_direction.Normalized();
+
+			// from current_direction to new direction?/
+			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, strength) - current_direction;
+			lurch_direction = lurch_direction.Normalized();
+
+			float before_speed = xz_length_vec3(velocity);
+
+			// not very sure of what on earth this line is calculating
+			Vector3 lurch_vector = current_direction * before_speed + lurch_direction * max;
+
+			if (xz_length_vec3(lurch_vector) > before_speed)
+			{
+				lurch_vector.Y = 0.0f; // is this even necessary? is fzzy schizo?
+				lurch_vector = lurch_vector.Normalized();
+				lurch_vector *= before_speed;
+			}
+
+			velocity.X = lurch_vector.X;
+			velocity.Z = lurch_vector.Z;
+		}
+	}
+
+
+	// helper functions
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private float xz_length_vec3(Vector3 vec)
+	{
+		return Mathf.Sqrt(vec.X * vec.X + vec.Z * vec.Z);
 	}
 
 }
