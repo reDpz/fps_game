@@ -60,19 +60,19 @@ public partial class Player : CharacterBody3D
 	public float jump_velocity = 4.0f;
 	public float last_jump_pressed = float.PositiveInfinity;
 	public float lurch_timer = 0.0f;
-	public const float LURCH_MAX_TIME = 0.2f;
-	public const float LURCH_END_TIME = 0.4f;
+	public float keyboard_graceperiod_min = 0.2f;
+	public float keyboard_graceperiod_max = 0.5f;
 	public float jump_buffer_min = 0.1f;
 	public float last_jumped = float.PositiveInfinity;
-	public float jump_fatigue = 0.9f;
+	public float jump_fatigue_time = 0.9f;
 
 
 	// source movement
 	// : AIR Movement {{{
 	public float floor_max_angle = Mathf.DegToRad(80);
-	public float air_cap = 0.35f;
+	public float air_cap = 0.55f;
 	public float air_accel = 10f;
-	public float air_move_speed = 1.5f;
+	public float air_move_speed = 5.0f;
 	/* public float air_cap = 0.20f;
 	public float air_accel = 800f;
 	public float air_move_speed = 500f; */
@@ -82,7 +82,7 @@ public partial class Player : CharacterBody3D
 	// : GROUND Movement {{{
 	public float walk_speed = 7.0f;
 	public float strafe_speed = 6.0f;
-	public float sprint_speed = 8.5f;
+	public float sprint_speed = 10.5f;
 	public float ground_accel = 14.0f;
 	public float ground_decel = 10.0f;
 	public float ground_friction = 6.0f;
@@ -183,6 +183,7 @@ public partial class Player : CharacterBody3D
 
 	public override void _Process(double delta)
 	{
+		GD.Print($"fps:{Engine.GetFramesPerSecond()}");
 		// update all values
 		gravity = GetGravity();
 		float felta = (float)delta;
@@ -372,15 +373,15 @@ public partial class Player : CharacterBody3D
 	{
 		float jump_propulsion = jump_velocity;
 #if RDEBUG
-		GD.Print($"{last_jumped} <= {jump_fatigue} : {last_jumped <= jump_fatigue}");
+		GD.Print($"{last_jumped} <= {jump_fatigue_time} : {last_jumped <= jump_fatigue_time}");
 #endif
-		if (last_jumped <= jump_fatigue)
+		if (last_jumped <= jump_fatigue_time)
 		{
 			jump_propulsion *= 0.6f;
 		}
 		velocity.Y += jump_propulsion;
 		last_jumped = 0;
-		lurch_timer = 0.4f;
+		lurch_timer = keyboard_graceperiod_max;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -394,7 +395,8 @@ public partial class Player : CharacterBody3D
 		return false;
 	}
 
-	// TODO: remove this label if used repeatedly
+	// Fzzy's algorithm from momentum mod
+	// TODO: remove this label if used in too many sections
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void attempt_lurch(float delta)
 	{
@@ -410,7 +412,7 @@ public partial class Player : CharacterBody3D
 			wish_dir = wish_dir.Normalized();
 
 			// Modified in order to keep the lurch fall off at 0.4
-			float amount = Mathf.Min(lurch_timer / (LURCH_END_TIME - LURCH_MAX_TIME), 1.0f);
+			float amount = Mathf.Min(lurch_timer / (keyboard_graceperiod_max - keyboard_graceperiod_min), 1.0f);
 			float strength = 0.7f;
 			// here PK_SPRINT_SPEED is being substituted by my sprint speed, I'm also using strength instead of the 0.7 float literal
 			// It's a bit confusing as to why they defined strength and then didn't use it until later. It doesn't make sense to do that
@@ -420,7 +422,7 @@ public partial class Player : CharacterBody3D
 			current_direction.Y = 0.0f;
 			current_direction = current_direction.Normalized();
 
-			// from current_direction to new direction?/
+			// from current_direction to new direction?
 			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, strength) - current_direction;
 			lurch_direction = lurch_direction.Normalized();
 
@@ -429,6 +431,8 @@ public partial class Player : CharacterBody3D
 			// not very sure of what on earth this line is calculating
 			Vector3 lurch_vector = current_direction * before_speed + lurch_direction * max;
 
+			// original algorithm essentially did an xz_length calculation
+			// FIXME: The problem here is that essentially all momentum is being lost whenever you attempt to do a yuki
 			if (xz_length_vec3(lurch_vector) > before_speed)
 			{
 				lurch_vector.Y = 0.0f; // is this even necessary? is fzzy schizo?
