@@ -42,6 +42,13 @@ public partial class Player : CharacterBody3D
 	// : }}}
 
 	// : Physics Properties {{{
+
+	public float max_health = 10.0f;
+	public float c_health = 10.0f;
+	// : }}}
+
+
+	// : Physics Properties {{{
 	// setting a default, only to ensure that we dont run into null
 	private Vector3 gravity = Vector3.Zero;
 	private Vector3 velocity = Vector3.Zero;
@@ -52,6 +59,9 @@ public partial class Player : CharacterBody3D
 	// jumping
 	public float jump_velocity = 4.0f;
 	public float last_jump_pressed = float.PositiveInfinity;
+	public float lurch_timer = 0.0f;
+	public const float LURCH_MAX_TIME = 0.2f;
+	public const float LURCH_END_TIME = 0.4f;
 	public float jump_buffer_min = 0.1f;
 	public float last_jumped = float.PositiveInfinity;
 	public float jump_fatigue = 0.9f;
@@ -62,7 +72,7 @@ public partial class Player : CharacterBody3D
 	public float floor_max_angle = Mathf.DegToRad(80);
 	public float air_cap = 0.35f;
 	public float air_accel = 10f;
-	public float air_move_speed = 4f;
+	public float air_move_speed = 1.5f;
 	/* public float air_cap = 0.20f;
 	public float air_accel = 800f;
 	public float air_move_speed = 500f; */
@@ -156,13 +166,13 @@ public partial class Player : CharacterBody3D
 					case Key.F11:
 						DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen);
 						break;
-#endif
 
 					// basic reset feature
 					case Key.T:
 						Position = new Vector3(0.0f, 20f, 0.0f);
-						Velocity = Vector3.Zero;
+						// Velocity = Vector3.Zero;
 						break;
+#endif
 
 				}
 			}
@@ -314,6 +324,7 @@ public partial class Player : CharacterBody3D
 		}
 		last_jump_pressed += delta;
 		last_jumped += delta;
+		lurch_timer -= delta;
 	}
 	// : }}}
 
@@ -369,6 +380,7 @@ public partial class Player : CharacterBody3D
 		}
 		velocity.Y += jump_propulsion;
 		last_jumped = 0;
+		lurch_timer = 0.4f;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -389,19 +401,16 @@ public partial class Player : CharacterBody3D
 		// this is essentially copied from momentum mod
 
 		// using last_jumped might be a slight tinge of jank
-		// last_jumped should always be greater than 0
-		if (new_input_pressed && (last_jumped > 0.0f && wish_dir.Length() > 0.1f))
+		// lurch timer decreases! it doesn't increase like "last_jumped"
+		if (new_input_pressed && (lurch_timer > 0.0f && wish_dir.Length() > 0.1f))
 		{
 			// should not need to normalize however check later
 			// Probably a good idea to create/get a fast normalizer although I dont think the performance impact will be that big
 			// Looks like the original code that has a "FastNormalize" function is using the fast inverse square root from quake
 			wish_dir = wish_dir.Normalized();
-			float min_time = 0.2f;
-			float max_time = 0.5f;
-			// I'm a bit unsure of why in the original source code it's divided by a 1000, possibly the timer is stored in MS rather than seconds?
-			// min and max are both stored in seconds very clearly as they correspond to the numbers zweek showed that determins the strength
-			// I am not storing my time in MS therefore I probably shouldn't divide by a 1000
-			float amount = Mathf.Min(last_jumped / (max_time - min_time), 1.0f);
+
+			// Modified in order to keep the lurch fall off at 0.4
+			float amount = Mathf.Min(lurch_timer / (LURCH_END_TIME - LURCH_MAX_TIME), 1.0f);
 			float strength = 0.7f;
 			// here PK_SPRINT_SPEED is being substituted by my sprint speed, I'm also using strength instead of the 0.7 float literal
 			// It's a bit confusing as to why they defined strength and then didn't use it until later. It doesn't make sense to do that
