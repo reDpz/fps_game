@@ -72,10 +72,10 @@ public partial class Player : CharacterBody3D
 
 	// source movement
 	// : AIR Movement {{{
-	public float floor_max_angle = Mathf.DegToRad(80);
-	public float air_cap = 0.55f;
-	public float air_accel = 10f;
-	public float air_move_speed = 2.0f;
+	public float floor_max_angle = Mathf.DegToRad(80); // this does technically run at runtime but only when creating instances
+	public float air_cap = 0.35f;
+	public float air_accel = 10.0f;
+	public float air_move_speed = .0f;
 	/* public float air_cap = 0.20f;
 	public float air_accel = 800f;
 	public float air_move_speed = 500f; */
@@ -318,7 +318,7 @@ public partial class Player : CharacterBody3D
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void air_accelerate(float delta)
 	{
-
+		// TODO: this isn't 1:1 to what valve did in the 2013 source sdk
 		var cur_speed_in_wish_dir = velocity.Dot(wish_dir);
 
 		// i feel like there is some unnecessary math going on here but it's still useful for controller i guess
@@ -434,16 +434,14 @@ public partial class Player : CharacterBody3D
 	{
 		// this is essentially copied from momentum mod
 
-		// using last_jumped might be a slight tinge of jank
-		// lurch timer decreases! it doesn't increase like "last_jumped"
-		if (new_input_pressed && (lurch_timer > 0.0f && wish_dir.Length() > 0.1f))
+		// Using lenght squared instead of length to avoid sqrt
+		if (new_input_pressed && (lurch_timer > 0.0f && wish_dir.LengthSquared() > 0.01f))
 		{
-			// should not need to normalize however check later
-			// Probably a good idea to create/get a fast normalizer although I dont think the performance impact will be that big
-			// Looks like the original code that has a "FastNormalize" function is using the fast inverse square root from quake
-			vector_normalize(ref wish_dir);
+			// Original code normalized it simply because they did not normalize it before
+			// vec3_normalize(ref wish_dir);
 
 			// Modified in order to keep the lurch fall off at 0.4
+			// this is how much lurch the player can receieve based on how long it has been since they jumped
 			float amount = Mathf.Min(lurch_timer / (keyboard_graceperiod_max - keyboard_graceperiod_min), 1.0f);
 			float strength = 0.7f;
 			// here PK_SPRINT_SPEED is being substituted by my sprint speed, I'm also using strength instead of the 0.7 float literal
@@ -452,11 +450,11 @@ public partial class Player : CharacterBody3D
 
 			Vector3 current_direction = velocity;
 			current_direction.Y = 0.0f;
-			vector_normalize(ref current_direction);
+			vec3_normalize(ref current_direction);
 
 			// from current_direction to new direction?
 			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, strength) - current_direction;
-			vector_normalize(ref lurch_direction);
+			vec3_normalize(ref lurch_direction);
 
 			float before_speed = xz_length_vec3(velocity);
 
@@ -468,7 +466,7 @@ public partial class Player : CharacterBody3D
 			if (xz_length_vec3(lurch_vector) > before_speed)
 			{
 				lurch_vector.Y = 0.0f;
-				vector_normalize(ref lurch_vector);
+				vec3_normalize(ref lurch_vector);
 				lurch_vector *= before_speed;
 			}
 #if RDEBUG
@@ -487,10 +485,5 @@ public partial class Player : CharacterBody3D
 
 
 	// helper functions
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private float xz_length_vec3(Vector3 vec)
-	{
-		return Mathf.Sqrt(vec.X * vec.X + vec.Z * vec.Z);
-	}
 
 }
