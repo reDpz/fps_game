@@ -1,13 +1,16 @@
 // vim:fileencoding=utf-8:foldmethod=marker
 #define RDEBUG
+// #define TESTS
 using Godot;
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using static math;
 
 // : TODO: {{{
-// - [ ] Get lurching working
+// - [x] Get lurching working
+// - [ ] redo wish_dir source engine style by calculating cross product etc
 // - [ ] Get a better understanding of what the air_* values do
-// - [ ] using a 1 byte uint to keep track of what inputs were pressed
 // - [ ] allow for the use of scrollwheel
 // = [ ] Implement fast square root for some extra performance
 // : }}}
@@ -18,7 +21,7 @@ using System.Runtime.CompilerServices;
 
 
 // : FIXME: {{{
-// - Nothing
+// - [ ] Fix Yuki strafes
 // : }}}
 
 
@@ -72,7 +75,7 @@ public partial class Player : CharacterBody3D
 	public float floor_max_angle = Mathf.DegToRad(80);
 	public float air_cap = 0.55f;
 	public float air_accel = 10f;
-	public float air_move_speed = 5.0f;
+	public float air_move_speed = 2.0f;
 	/* public float air_cap = 0.20f;
 	public float air_accel = 800f;
 	public float air_move_speed = 500f; */
@@ -82,7 +85,7 @@ public partial class Player : CharacterBody3D
 	// : GROUND Movement {{{
 	public float walk_speed = 7.0f;
 	public float strafe_speed = 6.0f;
-	public float sprint_speed = 10.5f;
+	public float sprint_speed = 11.5f;
 	public float ground_accel = 14.0f;
 	public float ground_decel = 10.0f;
 	public float ground_friction = 6.0f;
@@ -99,6 +102,10 @@ public partial class Player : CharacterBody3D
 	// : }}}
 
 	// : }}}
+	//
+#if TESTS
+	private float[] test_array = new float[1_000_000];
+#endif
 
 
 	public override void _Ready()
@@ -110,7 +117,29 @@ public partial class Player : CharacterBody3D
 		// lock mouse
 		Input.MouseMode = Input.MouseModeEnum.Captured;
 
-		// fullscreen, this should only be for debug builds
+		// test
+#if TESTS
+		Random rand = new Random();
+		var fast = Stopwatch.StartNew();
+		int count = test_array.Length;
+		for (int i = 0; i < count; i++)
+		{
+			Vector3 test_vec = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble());
+			math.vector_normalize(ref test_vec);
+
+		}
+		fast.Stop();
+
+		var def = Stopwatch.StartNew();
+		for (int i = 0; i < count; i++)
+		{
+			Vector3 test_vec = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble());
+			test_vec.Normalized();
+		}
+		def.Stop();
+
+		GD.Print($"Fast took: {fast.ElapsedMilliseconds} ms and def took: {def.ElapsedMilliseconds} ms");
+#endif
 	}
 
 	public override void _Input(InputEvent @event)
@@ -183,7 +212,6 @@ public partial class Player : CharacterBody3D
 
 	public override void _Process(double delta)
 	{
-		GD.Print($"fps:{Engine.GetFramesPerSecond()}");
 		// update all values
 		gravity = GetGravity();
 		float felta = (float)delta;
@@ -195,8 +223,6 @@ public partial class Player : CharacterBody3D
 		input_vector.X -= Input.IsActionPressed("strafe_left") ? 1.0f : 0.0f;
 		input_vector.Y += Input.IsActionPressed("backward") ? 1.0f : 0.0f;
 		input_vector.Y -= Input.IsActionPressed("forward") || Input.IsActionJustReleased("mwheelup") ? 1.0f : 0.0f;
-
-		input_vector = input_vector.Normalized();
 
 		// TODO: figure out how to apply strafe_speed
 
@@ -227,7 +253,7 @@ public partial class Player : CharacterBody3D
 		}
 		else
 		{
-			air_physics(felta);
+			air_move(felta);
 		}
 
 		common_physics(felta);
@@ -280,12 +306,19 @@ public partial class Player : CharacterBody3D
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void air_physics(float delta)
+	public void air_move(float delta)
 	{
 		// apply gravity
 		velocity += gravity * delta;
 
-		// ITS THIS SHORT?
+		attempt_lurch(delta);
+		air_accelerate(delta);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private void air_accelerate(float delta)
+	{
+
 		var cur_speed_in_wish_dir = velocity.Dot(wish_dir);
 
 		// i feel like there is some unnecessary math going on here but it's still useful for controller i guess
@@ -300,8 +333,6 @@ public partial class Player : CharacterBody3D
 			accel_speed = Mathf.Min(add_speed_till_cap, accel_speed);
 			velocity += accel_speed * wish_dir;
 		}
-
-		attempt_lurch(delta);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -398,7 +429,8 @@ public partial class Player : CharacterBody3D
 	// Fzzy's algorithm from momentum mod
 	// TODO: remove this label if used in too many sections
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void attempt_lurch(float delta)
+	// returns whether a successful lurch was made or not
+	public bool attempt_lurch(float delta)
 	{
 		// this is essentially copied from momentum mod
 
@@ -409,7 +441,7 @@ public partial class Player : CharacterBody3D
 			// should not need to normalize however check later
 			// Probably a good idea to create/get a fast normalizer although I dont think the performance impact will be that big
 			// Looks like the original code that has a "FastNormalize" function is using the fast inverse square root from quake
-			wish_dir = wish_dir.Normalized();
+			vector_normalize(ref wish_dir);
 
 			// Modified in order to keep the lurch fall off at 0.4
 			float amount = Mathf.Min(lurch_timer / (keyboard_graceperiod_max - keyboard_graceperiod_min), 1.0f);
@@ -420,11 +452,11 @@ public partial class Player : CharacterBody3D
 
 			Vector3 current_direction = velocity;
 			current_direction.Y = 0.0f;
-			current_direction = current_direction.Normalized();
+			vector_normalize(ref current_direction);
 
 			// from current_direction to new direction?
 			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, strength) - current_direction;
-			lurch_direction = lurch_direction.Normalized();
+			vector_normalize(ref lurch_direction);
 
 			float before_speed = xz_length_vec3(velocity);
 
@@ -435,14 +467,22 @@ public partial class Player : CharacterBody3D
 			// FIXME: The problem here is that essentially all momentum is being lost whenever you attempt to do a yuki
 			if (xz_length_vec3(lurch_vector) > before_speed)
 			{
-				lurch_vector.Y = 0.0f; // is this even necessary? is fzzy schizo?
-				lurch_vector = lurch_vector.Normalized();
+				lurch_vector.Y = 0.0f;
+				vector_normalize(ref lurch_vector);
 				lurch_vector *= before_speed;
 			}
+#if RDEBUG
+			// you idiot theyre ofc gonna be the same length
+			GD.Print($"lurch wish_dir: {wish_dir.Rotated(-Vector3.Up, Rotation.Y)}"); // relative wish_dir
+#endif
+
 
 			velocity.X = lurch_vector.X;
 			velocity.Z = lurch_vector.Z;
+
+			return true;
 		}
+		return false;
 	}
 
 
