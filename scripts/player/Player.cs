@@ -6,6 +6,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using static math;
+using static Settings;
 
 // : TODO: {{{
 // - [x] Get lurching working
@@ -16,12 +17,12 @@ using static math;
 // : }}}
 
 // : NOTE: {{{
-// - 
+// - [ ] lurches do feel a little off, maybe there is camera interpolation?
 // : }}}
 
 
 // : FIXME: {{{
-// - [ ] Fix Yuki strafes
+// - [x] Fix Yuki strafes
 // : }}}
 
 
@@ -32,7 +33,7 @@ public partial class Player : CharacterBody3D
 	// : Properties {{{
 
 	// : Helper Values {{{
-	// 89 degrees, this is used so i'm not running math.f to degrees every frame
+	// 89 degrees, this is used so settings_instance'm not running math.f to degrees every frame
 	private const float X_ROTATION_LOCK_RAD = 1.55334f;
 	// : }}}
 
@@ -64,41 +65,18 @@ public partial class Player : CharacterBody3D
 	public float jump_velocity = 4.0f;
 	public float last_jump_pressed = float.PositiveInfinity;
 	public float lurch_timer = 0.0f;
-	public float keyboard_graceperiod_min = 0.2f;
-	public float keyboard_graceperiod_max = 0.5f;
 	public float jump_buffer_min = 0.1f;
 	public float last_jumped = float.PositiveInfinity;
 	public float jump_fatigue_time = 0.9f;
 
 
-	// source movement
-	// : AIR Movement {{{
-	public float floor_max_angle = Mathf.DegToRad(80); // this does technically run at runtime but only when creating instances
-	public float air_cap = 0.35f;
-	public float air_accel = 10.0f;
-	public float air_move_speed = .0f;
-	/* public float air_cap = 0.20f;
-	public float air_accel = 800f;
-	public float air_move_speed = 500f; */
 
-	// : }}}
 
-	// : GROUND Movement {{{
-	public float walk_speed = 7.0f;
-	public float strafe_speed = 6.0f;
-	public float sprint_speed = 11.5f;
-	public float ground_accel = 14.0f;
-	public float ground_decel = 10.0f;
-	public float ground_friction = 6.0f;
-	// : }}}
 
 	// Apex/Titanfall movement
 	private bool new_input_pressed = false;
 
 	// : }}}
-	
-	// TODO: apply camera offsets
-	private Vector3[] camera_offsets = new Vector3[4];
 
 	// : Node Properties {{{
 	private Node3D head;
@@ -123,9 +101,7 @@ public partial class Player : CharacterBody3D
 
 		// test
 #if TESTS
-		Vector2 test_vector = new Vector2(1.0f,1.0f);
-		GD.Print(test_vector.Normalized());
-		GD.Print(test_vector.Normalized().Lerp(new Vector2(1.0f,0.0f),0.7f));
+		GD.Print($"{settings.sv.walk_speed}");
 #endif
 	}
 
@@ -173,7 +149,7 @@ public partial class Player : CharacterBody3D
 		else if (@event is InputEventKey key_event)
 		{
 
-			if (key_event.Pressed = true)
+			if (key_event.Pressed == true)
 			{
 
 				switch (key_event.Keycode)
@@ -206,18 +182,20 @@ public partial class Player : CharacterBody3D
 		velocity = Velocity;
 
 		input_vector = Vector2.Zero;
-		
+
 		input_vector.X += Input.IsActionPressed("strafe_right") ? 1.0f : 0.0f;
 		input_vector.X -= Input.IsActionPressed("strafe_left") ? 1.0f : 0.0f;
 		input_vector.Y += Input.IsActionPressed("backward") ? 1.0f : 0.0f;
 		input_vector.Y -= Input.IsActionPressed("forward") || Input.IsActionJustReleased("mwheelup") ? 1.0f : 0.0f;
 
 		world_vector = input_vector.Normalized();
-		world_vector.X *= strafe_speed;
-		world_vector.Y *= walk_speed;
+		world_vector.X *= settings.sv.strafe_speed;
+		world_vector.Y *= get_speed();
 		world_vector = world_vector.Rotated(-Rotation.Y);
 		wish_dir = new Vector3(world_vector.X, 0.0f, world_vector.Y);
 		wish_speed = vec3_normalize(ref wish_dir);
+
+		bool on_ground = IsOnFloor();
 
 		// this is a bit slow, since we're querying the same information twice;  TODO: optimize later
 		new_input_pressed = Input.IsActionJustPressed("strafe_left") || Input.IsActionJustPressed("strafe_right") ||
@@ -230,7 +208,7 @@ public partial class Player : CharacterBody3D
 		}
 
 		// Add the gravity.
-		if (IsOnFloor())
+		if (on_ground)
 		{
 			ground_physics(felta);
 		}
@@ -247,9 +225,22 @@ public partial class Player : CharacterBody3D
 		Velocity = velocity;
 		MoveAndSlide();
 
-		// calculate camera tilt
+		// calculate camera tilt, should be in _Process
 		Vector3 relative_velocity = Velocity * Transform.Basis;
 		Vector3 camera_rotation = camera.Rotation;
+		// WARN: division by 0 if strafe speed is 0 (why would it be?)
+		camera_rotation.Z = on_ground ? (-settings.cl.camera_max_z_rotation * relative_velocity.X / settings.sv.strafe_speed) : 0.0f;
+		camera.Rotation = camera.Rotation.Lerp(camera_rotation, felta * 13f);
+
+
+		// WARN: do not remove this
+		settings.pi.position = this.Position;
+		settings.pi.velocity = this.Velocity;
+		settings.pi.angles = new Vector3(
+				head.Rotation.X,
+				this.Rotation.Y,
+				camera.Rotation.Z
+				);
 	}
 
 	// these functions are only called from Process and PhysicsProcess
@@ -269,15 +260,15 @@ public partial class Player : CharacterBody3D
 
 		if (add_speed_till_cap > 0.0f)
 		{
-			var accel_speed = ground_accel * delta * wish_speed;
+			var accel_speed = settings.sv.ground_accel * delta * wish_speed;
 			accel_speed = Mathf.Min(accel_speed, add_speed_till_cap);
 			velocity += accel_speed * wish_dir;
 		}
 
 		// friction
 		float len = velocity.Length();
-		float control = Mathf.Max(len, ground_decel);
-		float drop = control * ground_friction * delta;
+		float control = Mathf.Max(len, settings.sv.ground_decel);
+		float drop = control * settings.sv.ground_friction * delta;
 		float new_speed = Mathf.Max(len - drop, 0.0f);
 		if (len > 0.0f)
 		{
@@ -294,8 +285,8 @@ public partial class Player : CharacterBody3D
 		// apply gravity
 		velocity += gravity * delta;
 
+		air_accelerate(delta);
 		attempt_lurch(delta);
-		// air_accelerate(delta);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -304,15 +295,15 @@ public partial class Player : CharacterBody3D
 		// TODO: this isn't 1:1 to what valve did in the 2013 source sdk
 		var cur_speed_in_wish_dir = velocity.Dot(wish_dir);
 
-		// i feel like there is some unnecessary math going on here but it's still useful for controller i guess
-		var capped_speed = Mathf.Min((air_move_speed * world_vector).Length(), air_cap);
+		// settings_instance feel like there is some unnecessary math going on here but it'settings still useful for controller settings_instance guess
+		var capped_speed = Mathf.Min((settings.sv.air_move_speed * world_vector).Length(), settings.sv.air_cap);
 
 		// this is essentially how much speed to add until we reach cap
 		var add_speed_till_cap = capped_speed - cur_speed_in_wish_dir;
 
 		if (add_speed_till_cap > 0.0f)
 		{
-			var accel_speed = air_accel * air_move_speed * delta;
+			var accel_speed = settings.sv.airaccelerate * settings.sv.air_move_speed * delta;
 			accel_speed = Mathf.Min(add_speed_till_cap, accel_speed);
 			velocity += accel_speed * wish_dir;
 		}
@@ -373,7 +364,7 @@ public partial class Player : CharacterBody3D
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private bool is_surface_too_steep(Vector3 normal)
 	{
-		float max_slope_ang_dot = Vector3.Up.Rotated(Vector3.Right, floor_max_angle).Dot(Vector3.Up);
+		float max_slope_ang_dot = Vector3.Up.Rotated(Vector3.Right, settings.sv.floor_max_angle).Dot(Vector3.Up);
 		return normal.Dot(Vector3.Up) < max_slope_ang_dot;
 	}
 
@@ -395,7 +386,7 @@ public partial class Player : CharacterBody3D
 		}
 		velocity.Y += jump_propulsion;
 		last_jumped = 0;
-		lurch_timer = keyboard_graceperiod_max;
+		lurch_timer = settings.sv.keyboard_graceperiod_max;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -409,7 +400,7 @@ public partial class Player : CharacterBody3D
 		return false;
 	}
 
-	// Fzzy's algorithm from momentum mod
+	// Fzzy'settings algorithm from momentum mod
 	// TODO: remove this label if used in too many sections
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	// returns whether a successful lurch was made or not
@@ -423,27 +414,23 @@ public partial class Player : CharacterBody3D
 			// Original code normalized it simply because they did not normalize it before
 			// vec3_normalize(ref wish_dir);
 
-			// Modified in order to keep the lurch fall off at 0.4
 			// this is how much lurch the player can receieve based on how long it has been since they jumped
-			float fall_off = Mathf.Min(lurch_timer / (keyboard_graceperiod_max - keyboard_graceperiod_min), 1.0f);
-			float strength = 0.7f;
-			// here PK_SPRINT_SPEED is being substituted by my sprint speed, I'm also using strength instead of the 0.7 float literal
-			// It's a bit confusing as to why they defined strength and then didn't use it until later. It doesn't make sense to do that
-			float max = sprint_speed * 0.8f * fall_off;
+			float fall_off = Mathf.Min(lurch_timer / (settings.sv.keyboard_graceperiod_max - settings.sv.keyboard_graceperiod_min), 1.0f);
+			// the 1.1f here was an unnammed literal in fzzy's code set to 0.7f, I'm compensating here for my lower sprint speed
+			float max = settings.sv.sprint_speed * 1.1f * fall_off;
 
 			Vector3 current_direction = velocity;
 			current_direction.Y = 0.0f;
 			float before_speed = vec3_normalize(ref current_direction);
 
 			// from current_direction to new direction?
-			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, strength) - current_direction;
+			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, settings.sv.lurch_strength) - current_direction;
 			vec3_normalize(ref lurch_direction);
 
 			// not very sure of what on earth this line is calculating
 			Vector3 lurch_vector = current_direction * before_speed + lurch_direction * max;
 
 			// original algorithm essentially did an xz_length calculation
-			// FIXME: The problem here is that essentially all momentum is being lost whenever you attempt to do a yuki
 			if (xz_length_vec3(lurch_vector) > before_speed)
 			{
 				lurch_vector.Y = 0.0f;
@@ -461,6 +448,18 @@ public partial class Player : CharacterBody3D
 			return true;
 		}
 		return false;
+	}
+
+	private float get_speed()
+	{
+		if (Input.IsActionPressed("sprint"))
+		{
+			return settings.sv.sprint_speed;
+		}
+		else
+		{
+			return settings.sv.walk_speed;
+		}
 	}
 
 
