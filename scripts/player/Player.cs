@@ -1,6 +1,6 @@
 // vim:fileencoding=utf-8:foldmethod=marker
 #define RDEBUG
-// #define TESTS
+#define TESTS
 using Godot;
 using System;
 using System.Diagnostics;
@@ -58,6 +58,7 @@ public partial class Player : CharacterBody3D
 	private Vector2 input_vector = Vector2.Zero;
 	private Vector2 world_vector = Vector2.Zero;
 	private Vector3 wish_dir = Vector3.Zero;
+	private float wish_speed = 0.0f;
 
 	// jumping
 	public float jump_velocity = 4.0f;
@@ -95,6 +96,9 @@ public partial class Player : CharacterBody3D
 	private bool new_input_pressed = false;
 
 	// : }}}
+	
+	// TODO: apply camera offsets
+	private Vector3[] camera_offsets = new Vector3[4];
 
 	// : Node Properties {{{
 	private Node3D head;
@@ -119,26 +123,9 @@ public partial class Player : CharacterBody3D
 
 		// test
 #if TESTS
-		Random rand = new Random();
-		var fast = Stopwatch.StartNew();
-		int count = test_array.Length;
-		for (int i = 0; i < count; i++)
-		{
-			Vector3 test_vec = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble());
-			math.vector_normalize(ref test_vec);
-
-		}
-		fast.Stop();
-
-		var def = Stopwatch.StartNew();
-		for (int i = 0; i < count; i++)
-		{
-			Vector3 test_vec = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble());
-			test_vec.Normalized();
-		}
-		def.Stop();
-
-		GD.Print($"Fast took: {fast.ElapsedMilliseconds} ms and def took: {def.ElapsedMilliseconds} ms");
+		Vector2 test_vector = new Vector2(1.0f,1.0f);
+		GD.Print(test_vector.Normalized());
+		GD.Print(test_vector.Normalized().Lerp(new Vector2(1.0f,0.0f),0.7f));
 #endif
 	}
 
@@ -219,22 +206,18 @@ public partial class Player : CharacterBody3D
 		velocity = Velocity;
 
 		input_vector = Vector2.Zero;
+		
 		input_vector.X += Input.IsActionPressed("strafe_right") ? 1.0f : 0.0f;
 		input_vector.X -= Input.IsActionPressed("strafe_left") ? 1.0f : 0.0f;
 		input_vector.Y += Input.IsActionPressed("backward") ? 1.0f : 0.0f;
 		input_vector.Y -= Input.IsActionPressed("forward") || Input.IsActionJustReleased("mwheelup") ? 1.0f : 0.0f;
 
-		// TODO: figure out how to apply strafe_speed
-
-		/* Vector2 temp_vector = input_vector;
-		// in the future use a get_speed and get_strafe_speed function so that these values can vary
-		// depending on conditions like what weapon the player is holding
-		temp_vector.Y *= walk_speed;
-		temp_vector.X *= strafe_speed; */
-
-		// Wish dir is in worldspace
-		world_vector = input_vector.Rotated(-Rotation.Y);
+		world_vector = input_vector.Normalized();
+		world_vector.X *= strafe_speed;
+		world_vector.Y *= walk_speed;
+		world_vector = world_vector.Rotated(-Rotation.Y);
 		wish_dir = new Vector3(world_vector.X, 0.0f, world_vector.Y);
+		wish_speed = vec3_normalize(ref wish_dir);
 
 		// this is a bit slow, since we're querying the same information twice;  TODO: optimize later
 		new_input_pressed = Input.IsActionJustPressed("strafe_left") || Input.IsActionJustPressed("strafe_right") ||
@@ -282,11 +265,11 @@ public partial class Player : CharacterBody3D
 
 		// TODO: replace walk_speed with sprint whenever needed, with an inline function. Yeah you could do 2 function calls but it doesnt hurt to only do 1
 		var cur_speed_in_wish_dir = velocity.Dot(wish_dir);
-		var add_speed_till_cap = walk_speed - cur_speed_in_wish_dir;
+		var add_speed_till_cap = wish_speed - cur_speed_in_wish_dir;
 
 		if (add_speed_till_cap > 0.0f)
 		{
-			var accel_speed = ground_accel * delta * walk_speed;
+			var accel_speed = ground_accel * delta * wish_speed;
 			accel_speed = Mathf.Min(accel_speed, add_speed_till_cap);
 			velocity += accel_speed * wish_dir;
 		}
@@ -312,7 +295,7 @@ public partial class Player : CharacterBody3D
 		velocity += gravity * delta;
 
 		attempt_lurch(delta);
-		air_accelerate(delta);
+		// air_accelerate(delta);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -442,21 +425,19 @@ public partial class Player : CharacterBody3D
 
 			// Modified in order to keep the lurch fall off at 0.4
 			// this is how much lurch the player can receieve based on how long it has been since they jumped
-			float amount = Mathf.Min(lurch_timer / (keyboard_graceperiod_max - keyboard_graceperiod_min), 1.0f);
+			float fall_off = Mathf.Min(lurch_timer / (keyboard_graceperiod_max - keyboard_graceperiod_min), 1.0f);
 			float strength = 0.7f;
 			// here PK_SPRINT_SPEED is being substituted by my sprint speed, I'm also using strength instead of the 0.7 float literal
 			// It's a bit confusing as to why they defined strength and then didn't use it until later. It doesn't make sense to do that
-			float max = sprint_speed * strength * amount;
+			float max = sprint_speed * 0.8f * fall_off;
 
 			Vector3 current_direction = velocity;
 			current_direction.Y = 0.0f;
-			vec3_normalize(ref current_direction);
+			float before_speed = vec3_normalize(ref current_direction);
 
 			// from current_direction to new direction?
 			Vector3 lurch_direction = current_direction.Lerp(wish_dir * 1.5f, strength) - current_direction;
 			vec3_normalize(ref lurch_direction);
-
-			float before_speed = xz_length_vec3(velocity);
 
 			// not very sure of what on earth this line is calculating
 			Vector3 lurch_vector = current_direction * before_speed + lurch_direction * max;
@@ -470,7 +451,6 @@ public partial class Player : CharacterBody3D
 				lurch_vector *= before_speed;
 			}
 #if RDEBUG
-			// you idiot theyre ofc gonna be the same length
 			GD.Print($"lurch wish_dir: {wish_dir.Rotated(-Vector3.Up, Rotation.Y)}"); // relative wish_dir
 #endif
 
