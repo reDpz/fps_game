@@ -175,6 +175,16 @@ public partial class Player : CharacterBody3D
 
 	public override void _Process(double delta)
 	{
+#if RDEBUG
+		if (Input.IsActionJustPressed("debug_bot_reset"))
+		{
+			Position = new Vector3(-1.0f, 0.0f, -18.5f);
+			head.Rotation = Vector3.Zero;
+			this.Rotation = Vector3.Zero;
+
+		}
+#endif
+
 		// update all values
 		gravity = GetGravity();
 		float felta = (float)delta;
@@ -189,12 +199,11 @@ public partial class Player : CharacterBody3D
 		input_vector.Y -= Input.IsActionPressed("forward") || Input.IsActionJustReleased("mwheelup") ? 1.0f : 0.0f;
 
 		world_vector = input_vector.Normalized();
-		world_vector.X *= settings.sv.strafe_speed;
+		world_vector.X *= world_vector.X > 0.0 ? settings.sv.strafe_speed : settings.sv.strafe_speed;
 		world_vector.Y *= get_speed();
 		world_vector = world_vector.Rotated(-Rotation.Y);
 		wish_dir = new Vector3(world_vector.X, 0.0f, world_vector.Y);
 		wish_speed = vec3_normalize(ref wish_dir);
-
 		bool on_ground = IsOnFloor();
 
 		// this is a bit slow, since we're querying the same information twice;  TODO: optimize later
@@ -210,7 +219,8 @@ public partial class Player : CharacterBody3D
 		// Add the gravity.
 		if (on_ground)
 		{
-			ground_physics(felta);
+			ground_move(felta);
+			ground_process(felta);
 		}
 		else
 		{
@@ -225,14 +235,22 @@ public partial class Player : CharacterBody3D
 		Velocity = velocity;
 		MoveAndSlide();
 
+
+
 		// calculate camera tilt, should be in _Process
 		Vector3 relative_velocity = Velocity * Transform.Basis;
-		Vector3 camera_rotation = camera.Rotation;
-		// WARN: division by 0 if strafe speed is 0 (why would it be?)
-		camera_rotation.Z = on_ground ? (-settings.cl.camera_max_z_rotation * relative_velocity.X / settings.sv.strafe_speed) : 0.0f;
-		camera.Rotation = camera.Rotation.Lerp(camera_rotation, felta * 13f);
+		if (settings.cl.camera_z_rotation_enabled)
+		{
+			Vector3 camera_rotation = camera.Rotation;
+			// WARN: division by 0 if strafe speed is 0 (why would it be?)
+			camera_rotation.Z = on_ground ? (-settings.cl.camera_max_z_rotation * relative_velocity.X / settings.sv.strafe_speed) : 0.0f;
+			camera.Rotation = camera.Rotation.Lerp(camera_rotation, felta * 13f);
+		}
+	}
 
-
+	public override void _PhysicsProcess(double delta)
+	{
+		// INFO: this is in physics process to avoid writing too many times here
 		// WARN: do not remove this
 		settings.pi.position = this.Position;
 		settings.pi.velocity = this.Velocity;
@@ -241,12 +259,13 @@ public partial class Player : CharacterBody3D
 				this.Rotation.Y,
 				camera.Rotation.Z
 				);
+
 	}
 
 	// these functions are only called from Process and PhysicsProcess
 	// : Physics {{{
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void ground_physics(float delta)
+	public void ground_move(float delta)
 	{
 		// jump if all conditions are valid
 		if (attempt_jump())
@@ -277,6 +296,11 @@ public partial class Player : CharacterBody3D
 
 		velocity *= new_speed;
 
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void ground_process(float delta)
+	{
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -25,6 +25,7 @@ public partial class Settings : Node
 
         // source engine ground
         public float walk_speed;
+        public float backwards_speed;
         public float strafe_speed;
         public float sprint_speed;
         public float ground_accel;
@@ -45,6 +46,7 @@ public partial class Settings : Node
             floor_max_angle = Mathf.DegToRad(80); // this does technically run at runtime but only when creating instances
 
             walk_speed = 6.0f;
+            backwards_speed = 0.3f;
             strafe_speed = 6.0f;
             sprint_speed = 8.0f;
             ground_accel = 10.0f;
