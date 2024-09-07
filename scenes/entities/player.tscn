@@ -1,6 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://ddgvla7lgl8w0"]
+[gd_scene load_steps=5 format=3 uid="uid://ddgvla7lgl8w0"]
 
 [ext_resource type="Script" path="res://scripts/player/Player.cs" id="1_c1dq6"]
+[ext_resource type="FontFile" uid="uid://dle75x5ucoarp" path="res://fonts/firacode/FiraCode-Medium.ttf" id="2_knkhc"]
+[ext_resource type="Script" path="res://scripts/UI/debug/Showpos.cs" id="3_ywdoa"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_00r4a"]
 radius = 0.4
@@ -30,7 +32,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="ColorRect" type="ColorRect" parent="Control"]
+[node name="crosshair" type="ColorRect" parent="Control"]
 custom_minimum_size = Vector2(2, 2)
 layout_mode = 1
 anchors_preset = 8
@@ -38,6 +40,37 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
+offset_left = -1.0
+offset_top = -1.0
+offset_right = 1.0
+offset_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 1, 0, 1)
+
+[node name="showpos background" type="ColorRect" parent="Control"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 350.0
+offset_bottom = 100.0
+color = Color(0, 0, 0, 0.423529)
+
+[node name="showpos" type="Label" parent="Control/showpos background"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -25.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("2_knkhc")
+text = "pos: x y z
+vel: x y z (len)
+rot: y p r"
+vertical_alignment = 1
+justification_flags = 162
+script = ExtResource("3_ywdoa")
