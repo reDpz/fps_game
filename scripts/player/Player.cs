@@ -161,7 +161,7 @@ public partial class Player : CharacterBody3D
 
 					// basic reset feature
 					case Key.T:
-						Position = new Vector3(0.0f, 20f, 0.0f);
+						Position = new Vector3(2.5f, 30.0f, 0.0f);
 						// Velocity = Vector3.Zero;
 						break;
 #endif
@@ -238,14 +238,20 @@ public partial class Player : CharacterBody3D
 
 
 		// calculate camera tilt, should be in _Process
-		Vector3 relative_velocity = Velocity * Transform.Basis;
-		if (settings.cl.camera_z_rotation_enabled)
+		Vector3 camera_rotation = camera.Rotation;
+		if (settings.cl.camera_roll_enabled)
 		{
-			Vector3 camera_rotation = camera.Rotation;
+			Vector3 relative_velocity = Velocity * Transform.Basis;
 			// WARN: division by 0 if strafe speed is 0 (why would it be?)
-			camera_rotation.Z = on_ground ? (-settings.cl.camera_max_z_rotation * relative_velocity.X / settings.sv.strafe_speed) : 0.0f;
-			camera.Rotation = camera.Rotation.Lerp(camera_rotation, felta * 13f);
+			camera_rotation.Z = on_ground ? (-settings.cl.max_camera_roll * Mathf.Clamp(relative_velocity.X / settings.sv.strafe_speed, -1.0f, 1.0f)) : 0.0f;
 		}
+		/* if (settings.cl.camera_pitch_enabled)
+		{
+			camera_rotation.X = on_ground ? (-settings.cl.max_camera_pitch * Mathf.Clamp(Velocity.Y / gravity.Y, -1.0f, 1.0f)) : 0.0f;
+		} */
+
+		camera.Rotation = camera.Rotation.Lerp(camera_rotation, felta * 13f);
+
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -402,7 +408,7 @@ public partial class Player : CharacterBody3D
 	{
 		float jump_propulsion = jump_velocity;
 #if RDEBUG
-		GD.Print($"{last_jumped} <= {jump_fatigue_time} : {last_jumped <= jump_fatigue_time}");
+		// GD.Print($"{last_jumped} <= {jump_fatigue_time} : {last_jumped <= jump_fatigue_time}");
 #endif
 		if (last_jumped <= jump_fatigue_time)
 		{
@@ -441,7 +447,7 @@ public partial class Player : CharacterBody3D
 			// this is how much lurch the player can receieve based on how long it has been since they jumped
 			float fall_off = Mathf.Min(lurch_timer / (settings.sv.keyboard_graceperiod_max - settings.sv.keyboard_graceperiod_min), 1.0f);
 			// the 1.1f here was an unnammed literal in fzzy's code set to 0.7f, I'm compensating here for my lower sprint speed
-			float max = settings.sv.sprint_speed * 1.1f * fall_off;
+			float max = settings.sv.sprint_speed * 0.9f * fall_off;
 
 			Vector3 current_direction = velocity;
 			current_direction.Y = 0.0f;
@@ -462,7 +468,7 @@ public partial class Player : CharacterBody3D
 				lurch_vector *= before_speed;
 			}
 #if RDEBUG
-			GD.Print($"lurch wish_dir: {wish_dir.Rotated(-Vector3.Up, Rotation.Y)}"); // relative wish_dir
+			// GD.Print($"lurch wish_dir: {wish_dir.Rotated(-Vector3.Up, Rotation.Y)}"); // relative wish_dir
 #endif
 
 

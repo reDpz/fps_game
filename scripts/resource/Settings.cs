@@ -76,13 +76,17 @@ public partial class Settings : Node
 
     public struct ClientSettings
     {
-        public bool camera_z_rotation_enabled;
-        public float camera_max_z_rotation;
+        public bool camera_roll_enabled;
+        public bool camera_pitch_enabled;
+        public float max_camera_pitch;
+        public float max_camera_roll;
 
         public ClientSettings()
         {
-            camera_z_rotation_enabled = true;
-            camera_max_z_rotation = Mathf.DegToRad(3.0f);
+            camera_roll_enabled = true;
+            camera_pitch_enabled = true;
+            max_camera_roll = Mathf.DegToRad(3.0f);
+            max_camera_pitch = Mathf.DegToRad(90.0f);
         }
     }
 
