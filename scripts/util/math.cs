@@ -4,6 +4,11 @@ using System.Runtime.CompilerServices;
 
 public static class math
 {
+
+    // multiply any sensitivity to get the dots/360
+    public static readonly float SOURCE_TO_DOTS_SENSITIVITY = 3.8397328871272742409526551410197e-4f;
+
+
     // from source sdk
     public static float vec3_normalize(ref Vector3 vec)
     {
@@ -21,6 +26,14 @@ public static class math
     {
         return Mathf.Sqrt(vec.X * vec.X + vec.Z * vec.Z);
     }
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float dots_sensitivity(float sensitivity)
+    {
+        return sensitivity * SOURCE_TO_DOTS_SENSITIVITY;
+    }
+
 
 }
 

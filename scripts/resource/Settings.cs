@@ -7,7 +7,7 @@ public partial class Settings : Node
 
     public ServerSettings sv = new ServerSettings();
     public PlayerInfo pi = new PlayerInfo();
-    public ClientSettings cl = new ClientSettings();
+    public ClientSettings def = ClientSettings.load_from_config_file();
 
 
     public override void _Ready()
@@ -76,6 +76,11 @@ public partial class Settings : Node
 
     public struct ClientSettings
     {
+        private static readonly string FILE_PATH = "user://client_settings.ini";
+        // INPUT
+        public float sensitivity;
+
+        // CAMERA
         public bool camera_roll_enabled;
         public bool camera_pitch_enabled;
         public float max_camera_pitch;
@@ -83,10 +88,49 @@ public partial class Settings : Node
 
         public ClientSettings()
         {
+            sensitivity = 1.0f;
             camera_roll_enabled = true;
             camera_pitch_enabled = true;
             max_camera_roll = Mathf.DegToRad(3.0f);
             max_camera_pitch = Mathf.DegToRad(90.0f);
+        }
+
+        public static ClientSettings load_from_config_file()
+        {
+            var def = new ClientSettings();
+            var config = new ConfigFile();
+            Error err = config.Load(FILE_PATH);
+
+            // read values
+            if (err != Error.Ok)
+            {
+                GD.Print("Failed to load client settings");
+                // overwrite corrupt config file
+                def.save_config_file();
+                return def;
+            }
+
+            def.sensitivity = (float)config.GetValue("input", "sensitivity", def.sensitivity);
+            def.camera_roll_enabled = (bool)config.GetValue("camera", "camera_roll_enabled", def.camera_roll_enabled);
+            def.camera_pitch_enabled = (bool)config.GetValue("camera", "camera_pitch_enabled", def.camera_pitch_enabled);
+            def.max_camera_roll = (float)config.GetValue("camera", "max_camera_roll", def.max_camera_roll);
+            def.max_camera_pitch = (float)config.GetValue("camera", "max_camera_pitch", def.max_camera_pitch);
+
+
+            return def;
+        }
+
+        public void save_config_file()
+        {
+            // this is possibly a bit slow? but it's not running every frame or even often
+            ConfigFile config = new ConfigFile();
+            config.SetValue("input", "sensitivity", sensitivity);
+            config.SetValue("camera", "camera_roll_enabled", camera_roll_enabled);
+            config.SetValue("camera", "camera_pitch_enabled", camera_pitch_enabled);
+            config.SetValue("camera", "max_camera_roll", max_camera_roll);
+            config.SetValue("camera", "max_camera_pitch", max_camera_pitch);
+            config.Save(FILE_PATH);
+
         }
     }
 

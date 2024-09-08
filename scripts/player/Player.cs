@@ -39,8 +39,7 @@ public partial class Player : CharacterBody3D
 
 
 	// : Settings Properties {{{
-	[Export]
-	public float mouse_sensitivity = 0.003f;
+	public float camera_sensitivity_multiplier;
 	[Export]
 	public bool auto_hop = true;
 	// : }}}
@@ -95,6 +94,7 @@ public partial class Player : CharacterBody3D
 		// it should be kept in this layout in the project
 		head = GetNode<Node3D>("./head");
 		camera = GetNode<Camera3D>("./head/camera");
+		camera_sensitivity_multiplier = math.dots_sensitivity(settings.def.sensitivity);
 
 		// lock mouse
 		Input.MouseMode = Input.MouseModeEnum.Captured;
@@ -110,25 +110,18 @@ public partial class Player : CharacterBody3D
 		// : Camera Motions {{{
 		if (@event is InputEventMouseMotion mouse_motion)
 		{
-			mouse_motion.Relative *= mouse_sensitivity;
-			if (mouse_motion.Relative.X != 0.0)
-			{
-				this.RotateY(-mouse_motion.Relative.X);
-			}
+			this.RotateY(-mouse_motion.ScreenRelative.X * camera_sensitivity_multiplier);
 
-			if (mouse_motion.Relative.Y != 0.0)
-			{
-				head.RotateX(-mouse_motion.Relative.Y);
+			head.RotateX(-mouse_motion.ScreenRelative.Y * camera_sensitivity_multiplier);
 
-				// lock the rotation on X
-				Vector3 rotation = new Vector3(
-						Math.Clamp(head.Rotation.X, -X_ROTATION_LOCK_RAD, X_ROTATION_LOCK_RAD),
-						head.Rotation.Y,
-						head.Rotation.Z
-						);
-				head.Rotation = rotation;
+			// lock the rotation on X
+			Vector3 rotation = new Vector3(
+					Math.Clamp(head.Rotation.X, -X_ROTATION_LOCK_RAD, X_ROTATION_LOCK_RAD),
+					head.Rotation.Y,
+					head.Rotation.Z
+					);
+			head.Rotation = rotation;
 
-			}
 
 
 		}
@@ -239,15 +232,15 @@ public partial class Player : CharacterBody3D
 
 		// calculate camera tilt, should be in _Process
 		Vector3 camera_rotation = camera.Rotation;
-		if (settings.cl.camera_roll_enabled)
+		if (settings.def.camera_roll_enabled)
 		{
 			Vector3 relative_velocity = Velocity * Transform.Basis;
 			// WARN: division by 0 if strafe speed is 0 (why would it be?)
-			camera_rotation.Z = on_ground ? (-settings.cl.max_camera_roll * Mathf.Clamp(relative_velocity.X / settings.sv.strafe_speed, -1.0f, 1.0f)) : 0.0f;
+			camera_rotation.Z = on_ground ? (-settings.def.max_camera_roll * Mathf.Clamp(relative_velocity.X / settings.sv.strafe_speed, -1.0f, 1.0f)) : 0.0f;
 		}
-		/* if (settings.cl.camera_pitch_enabled)
+		/* if (settings.def.camera_pitch_enabled)
 		{
-			camera_rotation.X = on_ground ? (-settings.cl.max_camera_pitch * Mathf.Clamp(Velocity.Y / gravity.Y, -1.0f, 1.0f)) : 0.0f;
+			camera_rotation.X = on_ground ? (-settings.def.max_camera_pitch * Mathf.Clamp(Velocity.Y / gravity.Y, -1.0f, 1.0f)) : 0.0f;
 		} */
 
 		camera.Rotation = camera.Rotation.Lerp(camera_rotation, felta * 13f);
@@ -490,6 +483,11 @@ public partial class Player : CharacterBody3D
 		{
 			return settings.sv.walk_speed;
 		}
+	}
+
+	public void recalculate_sensitivity()
+	{
+		camera_sensitivity_multiplier = math.dots_sensitivity(settings.def.sensitivity);
 	}
 
 
