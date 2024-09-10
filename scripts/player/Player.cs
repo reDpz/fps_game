@@ -122,7 +122,9 @@ public partial class Player : CharacterBody3D
 					);
 			head.Rotation = rotation;
 
-
+			// prevent FPP errors
+			head.Orthonormalize();
+			this.Orthonormalize();
 
 		}
 		/* 	else if (@event is InputEventMouseButton mouse_button)
